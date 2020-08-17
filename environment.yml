@@ -9,6 +9,7 @@ dependencies:
   - numpy=1.17.3
   - matplotlib=3.2.1
   - faiss-gpu=1.6.0
+  - pillow=7.0.0
   - pip
   - pip:
     - tqdm==4.40.2
