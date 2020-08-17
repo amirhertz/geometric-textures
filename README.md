@@ -22,7 +22,7 @@ This repository contains the code for:
 #### Download Example Data
 First get the multi-scaled training inputs already prepared by running
 ```bash
-bash ./scripts/get_train_data.sh
+bash ./scripts/train/get_train_data.sh
 ```
 
 #### Running Training
