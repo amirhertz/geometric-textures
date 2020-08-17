@@ -4,11 +4,11 @@ from torch import nn
 import models.factory as factory
 from models.single_mesh_models import SingleMeshDiscriminator
 from models.mesh_handler import MeshHandler, load_template_mesh
-from dgst_base import DGST
+from dgts_base import DGTS
 from process_data import mesh_utils
 
 
-class Trainer(DGST):
+class Trainer(DGTS):
 
     def __init__(self, opt: options.TrainOption, device: D):
         super(Trainer, self).__init__(opt, device)
