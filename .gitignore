@@ -1,0 +1,9 @@
+.idea/*
+*.pyc
+*.zip
+*.obj
+*.off
+*.png
+checkpoints/
+dataset/
+

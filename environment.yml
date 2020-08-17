@@ -1,0 +1,14 @@
+name: dgts
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.6.8
+  - cython=0.27.3
+  - pytorch=1.2.0
+  - numpy=1.17.3
+  - matplotlib=3.2.1
+  - faiss-gpu=1.6.0
+  - pip
+  - pip:
+    - tqdm==4.40.2
