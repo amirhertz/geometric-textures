@@ -14,7 +14,7 @@ This repository contains the code for:
 (3) synthesizing the learned geometric textures on unseen models
 
 #### Installation
-- Clone this repo `git clone https://github.com/amirhertz/dgts`.
+- Clone this repo `git clone https://github.com/amirhertz/geometric-textures.git`.
 - Install via conda environment `conda env create -f environment.yml` (creates an environment called dgts)
 #
 ### Training Demo
