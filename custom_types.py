@@ -23,7 +23,7 @@ CPU = torch.device('cpu')
 CUDA = lambda x: torch.device(f'cuda:{x}')
 
 Optimizer = torch.optim.Adam
-NoiseT = Tuple[Union[bool, int], ...]
+NoiseT = Union[int, Tuple[Union[bool, int], ...]]
 
 @unique
 class NoiseType(Enum):

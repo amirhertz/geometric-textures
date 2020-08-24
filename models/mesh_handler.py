@@ -27,6 +27,11 @@ class MeshHandler:
         else:
             self.local_axes = local_axes
 
+    @staticmethod
+    def reset():
+        MeshHandler._mesh_dss = []
+        MeshHandler._upsamplers = []
+
     # in place
     def to(self, device: D):
         self.raw_mesh = (self.vs.to(device), self.faces.to(device))
@@ -143,9 +148,8 @@ class MeshHandler:
             mesh_utils.export_mesh((self.vs / (self.opt.scale_vs_factor ** self.level), self.faces), path)
 
     def plot(self, save_path: str = '', ambient_color: T = T((255., 200, 255.)),
-             light_dir: T = T((.5, .5, 1))):
-        if not self.opt.debug:
-            plot_mesh(self.mesh_copy, save_path=save_path, ambient_color=ambient_color, light_dir=light_dir)
+        light_dir: T = T((.5, .5, 1))):
+        return plot_mesh(self.mesh_copy, save_path=save_path, ambient_color=ambient_color, light_dir=light_dir)
 
     @property
     def vs(self) -> T:
@@ -182,7 +186,7 @@ class MeshHandler:
 
     @property
     def mesh_copy(self) -> T_Mesh:
-        return self.vs.data.cpu().clone(), self.faces.data.cpu().clone()
+        return self.vs.detach().cpu().clone(), self.faces.detach().cpu().clone()
 
     def __call__(self, z: Union[T, float] = 0, noise_before: bool = False) -> T:
         return self.extract_features(z, noise_before)

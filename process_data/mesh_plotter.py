@@ -144,20 +144,4 @@ def plot_mesh(*meshes: Union[T_Mesh, str], save_path: str = '',
         save_path = files_utils.add_suffix(save_path, '.png')
         files_utils.init_folders(save_path)
         im.save(save_path)
-    elif 'DISPLAY' in os.environ:
-        im.show()
-
-if __name__=='__main__':
-    meshes = [''.join(path) for path in files_utils.collect('/home/amir/projects/mishmesh/checkpoints/bunny_noise/inference/', '.obj')]
-
-    plot_mesh(*meshes,
-              save_path='/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/bunnies')
-    # plot_mesh('/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/temp15.obj',
-    #           '/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/temp24.obj',
-    #           '/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/temp24.obj',
-    #           '/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/temp23.obj',
-    #           '/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/temp44.obj',
-    #           '/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/temp33.obj',
-    #            save_path='/home/amir/projects/mishmesh/checkpoints/sphere_rail_noise/inference/sphere_rail_bunny')
-
-    print("done")
+    return im

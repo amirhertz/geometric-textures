@@ -3,6 +3,9 @@ import constants as const
 import time
 import pickle
 from typing import List
+import requests
+import tarfile
+import shutil
 
 
 def init_folders(*folders):
@@ -58,3 +61,48 @@ def measure_time(func, num_iters: int, *args):
     total_time = time.time() - start_time
     avg_time = total_time / num_iters
     print(f"{str(func).split()[1].split('.')[-1]} total time: {total_time}, average time: {avg_time}")
+
+
+def download_file_from_google_drive(id, destination):
+    init_folders(destination)
+    # taken from this stackoverflow: https://stackoverflow.com/a/39225039
+
+    def get_confirm_token(response_):
+        for key, value in response_.cookies.items():
+            if key.startswith('download_warning'):
+                return value
+        return None
+
+    def save_response_content(response_, destination_):
+        CHUNK_SIZE = 32768
+        with open(destination_, "wb") as f:
+            for chunk in response_.iter_content(CHUNK_SIZE):
+                if chunk:  # filter out keep-alive new chunks
+                    f.write(chunk)
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+
+    response = session.get(URL, params={'id': id}, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = {'id':id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+
+    save_response_content(response, destination)
+
+
+def decompress_data(path: str):
+    src = f'{const.DATA_ROOT}/_raw/'
+    init_folders(f'{const.RAW_MESHES}/')
+    tar = tarfile.open(path)
+    tar.extractall(f'{const.DATA_ROOT}/')
+    tar.close()
+    os.remove(path)
+    files = os.listdir(src)
+    for name in files:
+        srcname = os.path.join(src, name)
+        dstname = os.path.join(f'{const.RAW_MESHES}/', name)
+        if not os.path.isfile(dstname):
+            shutil.move(srcname, f'{const.RAW_MESHES}/')
+    shutil.rmtree(src)

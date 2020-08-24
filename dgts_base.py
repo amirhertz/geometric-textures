@@ -98,15 +98,17 @@ class Mesh2Mesh(DGTS):
             else:
                 z_b = self.get_z_sequence(mesh, end - start).to(self.device)
 
-    def __call__(self, mesh: Union[str, MeshHandler, N], start: int, end: int, zero_places: NoiseT = ()) -> MeshHandler:
+    def __call__(self, mesh: Union[str, MeshHandler, T_Mesh], start: int, end: int, zero_places: NoiseT = 0) -> MeshHandler:
+        MeshHandler.reset()
         start, end = self.trim(start, end)
+        if type(zero_places) is int:
+            zero_places = [zero_places]
         if len(zero_places) == 1:
             zero_places = zero_places * (end - start + 1)
         if mesh is None:
             mesh = MeshHandler(mesh_utils.load_real_mesh(self.opt.template_name, start),self.opt, 0).to(self.device)
-        elif type(mesh) is str:
+        elif type(mesh) is not MeshHandler:
             mesh = MeshHandler(mesh, self.opt, 0).to(self.device)
-
         z = self.get_z_sequence(mesh, end - start)
         for i in range(min(len(z), len(zero_places))):
             if zero_places[i]:

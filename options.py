@@ -4,6 +4,9 @@ import pickle
 import json
 import constants as const
 import argparse
+import sys
+from functools import reduce
+
 
 class Options:
 
@@ -56,28 +59,37 @@ class Options:
             return backward_compatibility(loaded)
         return backward_compatibility(self)
 
-    def fill_args(self, args):
-        for arg in args:
+    def fill_args(self, **kwargs):
+        for arg in kwargs:
             if hasattr(self, arg):
-                setattr(self, arg, args[arg])
+                setattr(self, arg, kwargs[arg])
+
+    @staticmethod
+    def in_notebook() -> bool:
+        if len(sys.argv) < 2:
+            return False
+        return reduce(lambda x, y: x or y, map(lambda x: 'jupyter' in x, sys.argv[1:]))
 
     def parse_cmdline(self):
+        if self.in_notebook():
+            return
         parser = argparse.ArgumentParser(description='DGTS options')
-        parser.add_argument('--tag', type=str, default='demo', help='')
-        parser.add_argument('--mesh-name', type=str, default='sphere_rail', help='')
+        parser.add_argument('--tag', type=str, help='')
+        parser.add_argument('--mesh-name', type=str, help='')
         parser.add_argument('--template-name', type=str, default='sphere', help='')
-        parser.add_argument('--num-levels', type=int, default=5, help='')
+        parser.add_argument('--num-levels', type=int, help='')
         parser.add_argument('--start-level', type=int, default=0, help='')
         # inference options
-        parser.add_argument('--gen-mode', type=str, default='generate', choices=['generate', 'animate'])
+        parser.add_argument('--gen-mode', type=str, choices=['generate', 'animate'])
         parser.add_argument('--num-gen-samples', type=int, default=8)
         parser.add_argument('--target', type=str, default='fertility_al', help='')
         parser.add_argument('--gen-levels', nargs='+', type=int, default=[1, 4], help='')
         # gt optimization options
         parser.add_argument('--template-start', type=int, default=0, help='')
 
-        args = parser.parse_args()
-        self.fill_args(args.__dict__)
+        parser = parser.parse_args().__dict__
+        args = {key: item for key, item in parser.items() if item is not None}
+        self.fill_args(**args)
 
     def __init__(self, **kwargs):
         self.tag = 'demo'
@@ -94,10 +106,14 @@ class Options:
         self.nb_features = False
         self.fix_vs_noise = True
         self.gen_mode, self.num_gen_samples, self.target, self.gen_levels = None, None, None, None
-        self.fill_args(kwargs)
+        self.fill_args(**kwargs)
 
 
 class TrainOption(Options):
+
+    def fill_args(self, **kwargs):
+        super(TrainOption, self).fill_args(**kwargs)
+        self.level_iters = [2000] * (self.num_levels + self.start_level)
 
     def __init__(self, **kwargs):
         super(TrainOption, self).__init__()
@@ -106,17 +122,23 @@ class TrainOption(Options):
         self.lr_decay = 0.5
         self.lr_decay_every = 500
         self.export_meshes_every = 400
-        self.level_iters = [2000] * (self.num_levels + self.start_level)
         self.discriminator_iters = 2
         self.generator_iters = 3
         self.reconstruction_weight = 5
         self.penalty_weight = 0.1
         self.inside_out = False
-        self.fill_args(kwargs)
+        self.level_iters = [2000] * (self.num_levels + self.start_level)
         self.reconstruction_start = 1
+        self.fill_args(**kwargs)
 
 
 class GtOptions(TrainOption):
+
+    def fill_args(self, **kwargs):
+        super(TrainOption, self).fill_args(**kwargs)
+        self.level_iters = [3000] * (max(self.num_levels, 1) + self.start_level)
+        self.num_samples = [3000 * (i + 1) for i in range(max(self.num_levels, 1) + self.start_level)]
+
     def __init__(self, **kwargs):
         super(GtOptions, self).__init__()
         self.template_start = 0
@@ -131,13 +153,12 @@ class GtOptions(TrainOption):
         self.gamma_noraml_t2s = 0.1
         self.ch_iters = 2
         self.triangulation_iters = 3
-        # self.fill_args(kwargs)
         self.parse_cmdline()
-        self.level_iters = [3000] * (max(self.num_levels, 1) + self.start_level)
-        self.num_samples = [3000 * (i + 1) for i in range(max(self.num_levels, 1) + self.start_level)]
         self.pre_template = True
         self.switches = ()
-        self.fill_args(kwargs)
+        self.fill_args(**kwargs)
+        self.level_iters = [3000] * (max(self.num_levels, 1) + self.start_level)
+        self.num_samples = [3000 * (i + 1) for i in range(max(self.num_levels, 1) + self.start_level)]
 
     @property
     def cp_folder(self) -> str:
@@ -153,8 +174,7 @@ class GtOptions(TrainOption):
 
 
 def backward_compatibility(opt: Options) -> Options:
-    defaults = {'scale_vs_factor': 2, 'noise_before': False, 'nb_features': False,
-                'reconstruction_start': 1, 'fix_vs_noise': False}
+    defaults = {}
     for key, value in defaults.items():
         if not hasattr(opt, key):
             setattr(opt, key, value)

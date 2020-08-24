@@ -32,9 +32,10 @@ class GroundTruthGenerator:
     def refinement(self) -> bool:
         return self.opt.num_levels == 0
 
-    def __init__(self, opt: GtOptions):
+    def __init__(self, opt: GtOptions, device: D):
         self.opt = opt
         self.level = self.opt.start_level
+        self.device = device
         self.chamfer = ChamferLoss(device)
         self.scales = self.load_scales()
         self.target_mesh: Union[T_Mesh, N] = None
@@ -56,7 +57,7 @@ class GroundTruthGenerator:
             self.target_mesh = mesh_utils.load_mesh(f'{const.RAW_MESHES}/{self.opt.mesh_name}_{self.level}')
             self.target_mesh = (self.target_mesh[0] - self.target_transform[0][None, :]) * self.target_transform[1], self.target_mesh[1]
             self.opt.gamma_edge_global = self.opt.gamma_edge_local = 0
-        self.target_mesh = mesh_utils.to(self.target_mesh, device)
+        self.target_mesh = mesh_utils.to(self.target_mesh, self.device)
 
     def adjust_edge_scale(self) -> T_Mesh:
         if len(self.scales) == 0:
@@ -96,7 +97,7 @@ class GroundTruthGenerator:
 
     def ch_iter(self):
         sampled_source = mesh_utils.sample_on_mesh(self.source_mesh, self.opt.num_samples[self.level])
-        # sampled_target = mesh_utils.sample_on_sphere(self.target_mesh[0], self.opt.num_samples[self.level], device)
+        # sampled_target = mesh_utils.sample_on_sphere(self.target_mesh[0], self.opt.num_samples[self.level], self.device)
         sampled_target = mesh_utils.sample_on_mesh(self.target_mesh, self.opt.num_samples[self.level])
         chamfer_loss = self.chamfer(sampled_source, sampled_target)
         ch_loss = 0
@@ -110,8 +111,8 @@ class GroundTruthGenerator:
         return ch_loss, to_log
 
     def optimize(self) -> T_Mesh:
-        # mcp_s2t = MeshClosestPoint(self.target_mesh, self.source_mesh[0], self.ds_target).to(device)
-        # mcp_t2s = MeshClosestPoint(self.source_mesh, self.target_mesh[0], self.ds_source).to(device)
+        # mcp_s2t = MeshClosestPoint(self.target_mesh, self.source_mesh[0], self.ds_target).to(self.device)
+        # mcp_t2s = MeshClosestPoint(self.source_mesh, self.target_mesh[0], self.ds_source).to(self.device)
         self.source_mesh[0].requires_grad = True
         optimizer = Optimizer([self.source_mesh[0]], lr=self.opt.lr)
         for i in range(self.opt.level_iters[self.level]):
@@ -146,7 +147,7 @@ class GroundTruthGenerator:
         if self.source_mesh is None:
             last_mesh_path = f'{self.opt.cp_folder}/{self.opt.mesh_name}_level{self.level - 1 + self.refinement:02d}.obj'
             if self.level > 0 and os.path.isfile(last_mesh_path):
-                self.source_mesh = mesh_utils.to(mesh_utils.load_mesh(last_mesh_path), device)
+                self.source_mesh = mesh_utils.to(mesh_utils.load_mesh(last_mesh_path), self.device)
                 self.source_mesh = self.source_mesh[0] * (2 ** self.level), self.source_mesh[1]
                 self.target_mesh = self.target_mesh[0] * (2 ** self.level), self.target_mesh[1]
             else:
@@ -156,7 +157,7 @@ class GroundTruthGenerator:
                     self.source_mesh = mesh_utils.load_real_mesh(self.opt.template_name, self.opt.template_start, False)
                 else:
                     self.source_mesh = mesh_utils.load_mesh(mesh_path)
-                self.source_mesh = mesh_utils.to(mesh_utils.to_unit_cube(self.source_mesh)[0], device)
+                self.source_mesh = mesh_utils.to(mesh_utils.to_unit_cube(self.source_mesh)[0], self.device)
                 scale = 1 / mesh_utils.edge_lengths(self.source_mesh).mean().item()
                 self.target_mesh = self.target_mesh[0] * scale, self.target_mesh[1]
                 self.source_mesh = self.source_mesh[0] * scale, self.source_mesh[1]
@@ -166,7 +167,7 @@ class GroundTruthGenerator:
                     mesh_utils.export_mesh(self.source_mesh, f'{self.opt.cp_folder}/{self.opt.mesh_name}_template.obj')
         if self.level != 0 and not self.refinement:
             self.source_mesh = mesh_utils.Upsampler(self.source_mesh)(self.source_mesh)
-        self.ds_source = mesh_utils.VerticesDS(self.source_mesh).to(device)
+        self.ds_source = mesh_utils.VerticesDS(self.source_mesh).to(self.device)
 
         self.save_scales()
 
@@ -186,7 +187,10 @@ class GroundTruthGenerator:
 
 
 if __name__ == '__main__':
-    device = CUDA(0)
+    device_ = CUDA(0)
     opt_ = GtOptions()
-    gt_gen = GroundTruthGenerator(opt_)
-    gt_gen.generate_ground_truth_meshes()
+    args = GtOptions(online_demo=True)
+    args.fill_args(tag='demo', mesh_name='cloud', template_name='sphere', num_levels=6)
+    gt_gen = GroundTruthGenerator(args, CUDA(0))
+    # gt_gen = GroundTruthGenerator(opt_, device_)
+    # gt_gen.generate_ground_truth_meshes()
