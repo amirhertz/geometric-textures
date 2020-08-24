@@ -18,7 +18,7 @@ This repository contains the code for:
 - Install via conda environment `conda env create -f environment.yml` (creates an environment called dgts)
 
 #### Full Demo
-We provide an <a href="https://github.com/amirhertz/geometric-textures/demo.ipynb">End-to-End Notebook</a> which covers the 3 steps above.
+We provide an <a href="https://github.com/amirhertz/geometric-textures/blob/master/demo.ipynb">End-to-End Notebook</a> which covers the 3 steps above.
 
 #
 ### Training Demo
