@@ -1,8 +1,8 @@
 from custom_types import *
 from process_data import mesh_utils, files_utils
+import matplotlib as mpl
 import matplotlib.pylab as pl
 import mpl_toolkits.mplot3d as a3
-import matplotlib as mpl
 from PIL import Image
 import os
 mpl.use('Agg')
