@@ -17,8 +17,8 @@ This repository contains the code for:
 - Clone this repo `git clone https://github.com/amirhertz/geometric-textures.git`.
 - Install via conda environment `conda env create -f environment.yml` (creates an environment called dgts)
 
-#### Full Demo
-We provide an <a href="https://github.com/amirhertz/geometric-textures/blob/master/demo.ipynb">End-to-End Notebook</a> which covers the 3 steps above.
+#### Jupyter Demo
+We provide an <a href="https://github.com/amirhertz/geometric-textures/blob/master/demo.ipynb">End-to-End Notebook</a> which covers the 3 steps above. Or you can run each step seperately below. To use the Jupyter demo you should additionally install: jupyter, requests, and pytorch-gpu 
 
 #
 ### Training Demo
