@@ -4,7 +4,7 @@ from process_data.files_utils import init_folders, add_suffix
 import os
 import pickle
 import constants as const
-
+import math
 
 class Upsampler:
 
@@ -60,13 +60,15 @@ class MeshDS: # : mesh data structures
         if self.MAX_V_DEG == 0:
             self.init_v_degree(mesh)
         vs, faces = to(mesh, CPU) # seems to work faster on cpu
-        self.gfmm = torch.zeros(3, faces.shape[0], dtype=torch.int64)
-        self.vertex2faces = torch.zeros(vs.shape[0], self.MAX_V_DEG, dtype=torch.int64) - 1
+        self.gfmm = torch.neg(torch.ones(3, faces.shape[0], dtype=torch.int64))
+        self.vertex2faces = torch.zeros(vs.shape[0], self.MAX_V_DEG, dtype=torch.int64) - 1 
+        # vertex2faces: vertex mapped to values j, where j % 3 is index and j // 3 is triangle index
         self.__vertex2faces_flipped = None
         self.vs_degree = torch.zeros(vs.shape[0], dtype=torch.int64)
         self.build_ds(faces)
         self.vertex2faces_ma = (self.vertex2faces > -1).float()
         self.face2points = self.get_face2points(faces)
+        
 
     # inplace
     def to(self, device: D):
@@ -87,13 +89,28 @@ class MeshDS: # : mesh data structures
 
     def update_vs_degree(self, face, face_id, zero_one_two):
         self.vertex2faces[face, self.vs_degree[face]] = face_id * 3 + zero_one_two
-        self.vs_degree[face] += 1
+        self.vs_degree[face] += 1 # [degree_v1, degree_v2, ...]
 
     def build_ds(self, faces):
 
         def insert_edge():
-            nonlocal edges_count
+            '''
+                                                            2
+            edge2faces = edge_key 0 | face_id of adj face 0, face_id of adj face 1 |
+                         edge_key 1 |                       ...                      | # edges
+                         ...        |                       ...                      |
 
+                         edge_0                     edge_n
+                       = edge to adj faces of edge
+
+            edge2key = {(va, vb): edge_key_0, .... (vx, vy): edge_key_n, ...}
+                     = edge to edge_id dict
+
+                                                    # edges
+            edge2key_cache = [edge key 1st encountered, edge key 2nd encountered, ...]  1
+                           = order in which edges are encountered
+            '''
+            nonlocal edges_count
             if edge not in edge2key:
                 edge_key = edges_count
                 edge2key[edge] = edge_key
@@ -105,15 +122,38 @@ class MeshDS: # : mesh data structures
             edge2key_cache[face_id * 3 + idx] = edge_key
 
         def insert_face():
-            nb_faces = edge2faces[edge2key_cache[face_id * 3 + idx]]
-            nb_face = nb_faces[0] if nb_faces[0] != face_id else nb_faces[1]
-            self.gfmm[nb_count[face_id], face_id] = nb_face
+            '''
+                                                                    # faces
+            self.gfmm = 1st encountered adj face | 1st encountered adj face_key for face_id 0    ....  |
+                        2nd encountered adj face | ...                                            .... | 3
+                        3rd encountered adj face | ...                                            .... |
+            '''
+            nb_faces = edge2faces[edge2key_cache[face_id * 3 + idx]] # adj faces of curr edge of key (face_id*3 + idx)
+            nb_face = nb_faces[0] if nb_faces[0] != face_id else nb_faces[1] # adj face of curr face along curr edge
+            self.gfmm[nb_count[face_id], face_id] = nb_face 
             nb_count[face_id] += 1
 
         edge2key = dict()
         edge2key_cache = torch.zeros(int(faces.shape[0] * 3), dtype=torch.int64)
         edges_count = 0
-        edge2faces = torch.zeros(int(faces.shape[0] * 1.5), 2, dtype=torch.int64)
+
+        # open mesh extension: count number of boundary edges and non-boundary edges. 
+        edge2count_dict = {}
+        num_non_be = 0
+        for face_id, face in enumerate(faces):
+            faces_edges = [(face[i].item(), face[(i + 1) % 3].item()) for i in range(3)]
+            for edge in faces_edges:
+                hashed = unord_hash(edge[0], edge[1])
+                if hashed in edge2count_dict:
+                    del edge2count_dict[hashed]
+                    num_non_be += 1
+                else:
+                    edge2count_dict[unord_hash(edge[0], edge[1])] = 1
+        num_be = len(edge2count_dict)
+        self.num_non_be, self.num_be = num_non_be, num_be
+        # open mesh extension: if edge only has one adj face, set other to -1
+        edge2faces = torch.neg(torch.ones(self.num_be + self.num_non_be, 2, dtype=torch.int64))
+
         nb_count = torch.zeros(self.gfmm .shape[1], dtype=torch.int64)
         zero_one_two = torch.arange(3)
         for face_id, face in enumerate(faces):
@@ -128,14 +168,43 @@ class MeshDS: # : mesh data structures
         self.vs_degree = self.vs_degree.float()
 
     def get_face2points(self, faces) -> T:
+        '''
+                                    3
+        all_inds = face_id 0| face of adj face 0 |
+                            | ...                | 3
+                            | face of adj face 2 |,
+                                    3
+                   face_id 1| face of adj face 0 |
+                            | ...                | 3
+                            | face of adj face 2 |,
+                    ....
+                    
+                   <------------ # faces ----------->
+                  = all adjacent faces per face
+
+                                                        3
+                                    edge 1            edge 2            edge 3
+        cords_indices = face_id 0 | opp point of adj  opp point of adj  opp point of adj  |
+                                  | face to edge 1    face to edge 2    face to edge 3    |
+                        face_id 1 | ...               ...               ...               | # faces
+                        ...       |                  ......                               |
+                      = face's edge to opposite point of face that shares edge, if any (else -1)
+        '''
         cords_indices = torch.zeros(len(self), 3, dtype=torch.int64)
+        # open mesh extension: If there is < 3 adjacent faces, fill empty face slot in all_inds with [-1, -1, -1]
+        mask = self.gfmm.t().repeat_interleave(3).reshape((faces.shape[0], faces.shape[1], 3))
         all_inds = faces[self.gfmm.t()]
+        all_inds = torch.where(mask >= 0, all_inds, mask)
+
         for i in range(3):
-            ma_a = all_inds - faces[:, i][:, None, None]
-            ma_b = all_inds - faces[:, (i + 1) % 3][:, None, None]
-            ma = (ma_a * ma_b) == 0
-            ma_final = (ma.sum(2) == 2)[:, :, None] * (~ma)
-            cords_indices[:, i] = all_inds[ma_final]
+            ma_a = all_inds - faces[:, i][:, None, None] # all_inds - vector of ith vertex per face
+            ma_b = all_inds - faces[:, (i + 1) % 3][:, None, None] # all_inds - vector of (i+1)th vertex per face
+            ma = (ma_a * ma_b) == 0 # True if either ma_a or ma_b is 0 (vertex in adjacent face matches with ith vertex of face)
+            ma_final = (ma.sum(2) == 2)[:, :, None] * (~ma) # flip boolean if True > 1 in that row, else change everything to False
+                                                            # if True in row representing an adj face, that face shares edge i,i+1 with curr face
+
+            # open mesh extension: If there is no adj face, set to -1
+            cords_indices[:, i] = torch.where(ma_final, all_inds, -1).max(2)[0].max(1)[0]
         return cords_indices
 
     @staticmethod
@@ -190,6 +259,17 @@ class VerticesDS(MeshDS):
         self.faces_ring = self.faces_ring.to(device)
         self.edges_ind = self.edges_ind.to(device)
         return self
+
+def unord_hash(a, b):
+  # returns a unique hash value for each unordered (a, b) pair
+  if a == 0 or b == 0:
+    return (a + b) * -1
+  elif a < b:
+    return a * (b - 1) + math.trunc(math.pow(b - a - 2, 2)/ 4)
+  elif a > b:
+    return (a - 1) * b + math.trunc(math.pow(a - b - 2, 2)/ 4)
+  else:
+    return a * b + math.trunc(math.pow(abs(a - b) - 1, 2)/ 4)
 
 def to(mesh: T_Mesh, device: D) -> T_Mesh:
     return (mesh[0].to(device), mesh[1].to(device))
