@@ -87,7 +87,7 @@ class Options:
         # gt optimization options
         parser.add_argument('--template-start', type=int, default=0, help='')
 
-        parser = parser.parse_args().__dict__
+        parser = parser.parse_known_args()[0].__dict__
         args = {key: item for key, item in parser.items() if item is not None}
         self.fill_args(**args)
 
