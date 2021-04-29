@@ -41,7 +41,7 @@ def synthesize(args):
   m2m = Mesh2Mesh(train_args, CPU)
   mesh = mesh_utils.load_real_mesh(args.input_mesh, 0, True)
   out = m2m(mesh, 2, 5, 0)
-  out.export(args.input_mesh + '_hi')
+  out.export(f'{const.RAW_MESHES}/{args.input_mesh}_hi')
   print("Finished synthesizing input on " + args.input_mesh, flush=True)
 
 
