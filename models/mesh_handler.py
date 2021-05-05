@@ -14,6 +14,7 @@ class MeshHandler:
     _upsamplers: List[Union[mesh_utils.Upsampler, N]] = []
 
     def __init__(self, path_or_mesh: Union[str, T_Mesh], opt: Options, level: int, local_axes: Union[N, TS] = None):
+        self.num_be, self.num_non_be = 0, 0
         self.level = level
         self.opt = opt
         if type(path_or_mesh) is str:
@@ -52,7 +53,9 @@ class MeshHandler:
             MeshHandler._upsamplers.append(None)
 
     def fill_ds(self, mesh: T_Mesh, level: int):
-        MeshHandler._mesh_dss[level] = mesh_utils.MeshDS(mesh).to(mesh[0].device)
+        mesh_dss_ = mesh_utils.MeshDS(mesh)
+        self.num_be, self.num_non_be = mesh_dss_.num_be, mesh_dss_.num_non_be 
+        MeshHandler._mesh_dss[level] = mesh_dss_.to(mesh[0].device)
         MeshHandler._upsamplers[level] = mesh_utils.Upsampler(mesh).to(mesh[0].device)
 
     def update_ds(self, mesh: T_Mesh, level: int):
@@ -124,7 +127,11 @@ class MeshHandler:
                     origins, local_axes = self.get_local_axes((vs_, self.faces))
             else:
                 origins, local_axes = self.extract_local_axes()
-            global_cords = vs_[self.ds.face2points] - origins
+            # open mesh extension: If there is no adjacent face, set global_cords to 0
+
+        
+            mask_values = torch.repeat_interleave(self.ds.face2points, 3, dim=1).reshape((self.ds.face2points.shape[0], self.ds.face2points.shape[1], 3)) 
+            global_cords = torch.where(mask_values == -1, mask_values+1.0, vs_[self.ds.face2points] - origins)
             local_cords = torch.einsum('fsd,fsad->fsa', [global_cords, local_axes])
             return local_cords, vs_
 

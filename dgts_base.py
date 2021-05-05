@@ -22,8 +22,18 @@ class DGTS:
     def get_z_by_level(self, base_mesh: MeshHandler, level: int) -> T:
         num_faces = len(base_mesh) * 4 ** level
         if self.opt.noise_before:
-            num_faces = (num_faces - len(base_mesh)) // 2 + base_mesh.vs.shape[0]
-        return self.get_random_z(num_faces)
+            if base_mesh.num_be == 0:
+                num_ps = (num_faces - len(base_mesh)) // 2 + base_mesh.vs.shape[0]
+            else:
+                # open mesh extension: number of points determined by number of boundary and non-boundary edges
+                if level == 0:
+                    num_ps = base_mesh.vs.shape[0]
+                else:
+                    # Euler's adjusted formula, v = ((num_be + num_non_be) + 3 + num_be) / 3
+                    base_mesh.num_be = base_mesh.num_be * 2
+                    base_mesh.num_non_be = base_mesh.num_non_be * 2 + 3 * (len(base_mesh) * 4 ** (level-1))
+                    num_ps = int((base_mesh.num_be + base_mesh.num_non_be + 3 + base_mesh.num_be) / 3)
+        return self.get_random_z(num_ps)
 
     def get_z_sequence(self, base_mesh: MeshHandler, max_level: int) -> TS:
         return [self.get_z_by_level(base_mesh, level) for level in range(max_level + 1)]
